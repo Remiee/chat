@@ -4,6 +4,8 @@ import (
 	"os"
 	"log"
 	"net/http"
+	"strings"
+
 	"github.com/gorilla/websocket"
 )
 
@@ -13,9 +15,9 @@ var broadcast = make(chan Message)
 var upgrader = websocket.Upgrader{}
 
 type Message struct {
-	Email string `json:"email"`
+	Email    string `json:"email"`
 	Username string `json:"username"`
-	Message string `json:"message"`
+	Message  string `json:"message"`
 }
 
 func HandleConnections(w http.ResponseWriter, r *http.Request) {
@@ -43,6 +45,8 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 
 		storage = append(storage, msg)
 		saveMessage(msg)
+
+		ObsceneFilter(&msg)
 		broadcast <- msg
 	}
 }
@@ -69,7 +73,21 @@ func saveMessage(msg Message) {
 	}
 	_, err = f.Write([]byte(msg.Username + "/" + msg.Email + " - " + msg.Message + "\n"))
 	if err != nil {
-        panic(err)
-    }
-    f.Close()
+    panic(err)
+  }
+  f.Close()
+}
+
+func ObsceneFilter(msg *Message) {
+	obscenes := [6]string{"buzi", "fasz", "szar", "anyád", "kurva", "geci"}
+	var result []string
+	for _, word := range strings.Split(msg.Message, " ") {
+		for _, obsceneWord := range obscenes {
+			if strings.Contains(word, obsceneWord) {
+				word = "****"
+			}
+		}
+		result = append(result, word)
+	}
+	msg.Message = strings.Join(result, " ")
 }
