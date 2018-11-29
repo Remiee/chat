@@ -1,14 +1,15 @@
 package server
 
 import (
+	"os"
 	"log"
 	"net/http"
 	"github.com/gorilla/websocket"
 )
 
+var storage []Message
 var clients = make(map[*websocket.Conn]bool)
 var broadcast = make(chan Message)
-
 var upgrader = websocket.Upgrader{}
 
 type Message struct {
@@ -27,6 +28,10 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 
 	clients[ws] = true
 
+	for _, msg := range storage {
+		ws.WriteJSON(msg)
+	}
+
 	for {
 		var msg Message
 		err := ws.ReadJSON(&msg)
@@ -36,6 +41,8 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
+		storage = append(storage, msg)
+		saveMessage(msg)
 		broadcast <- msg
 	}
 }
@@ -53,4 +60,16 @@ func HandleMessages() {
 			}
 		}
 	}
+}
+
+func saveMessage(msg Message) {
+	f, err := os.OpenFile("./message.txt", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
+	if err != nil {
+		panic(err)
+	}
+	_, err = f.Write([]byte(msg.Username + "/" + msg.Email + " - " + msg.Message + "\n"))
+	if err != nil {
+        panic(err)
+    }
+    f.Close()
 }
