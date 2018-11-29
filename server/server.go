@@ -26,7 +26,7 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer ws.Close()
-
+	join()
 	clients[ws] = true
 
 	for {
@@ -35,6 +35,7 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("err: %v", err)
 			delete(clients, ws)
+			leave()
 			break
 		}
 
@@ -70,4 +71,22 @@ func ObsceneFilter(msg *Message) {
 		result = append(result, word)
 	}
 	msg.Message = strings.Join(result, " ")
+}
+
+func join() {
+	var sysMsg = Message{
+		Email:    "system",
+		Username: "system",
+		Message:  "Somebody joined to the channel.",
+	}
+	broadcast <- sysMsg
+}
+
+func leave() {
+	var sysMsg = Message{
+		Email:    "system",
+		Username: "system",
+		Message:  "Somebody has left the channel.",
+	}
+	broadcast <- sysMsg
 }
