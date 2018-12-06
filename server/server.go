@@ -1,24 +1,38 @@
 package server
 
 import (
-	"os"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/gorilla/websocket"
 )
 
-var storage []Message
-var clients = make(map[*websocket.Conn]bool)
-var broadcast = make(chan Message)
+var storage []Event
+var clients = make(map[*websocket.Conn]User)
+var broadcast = make(chan Event)
 var upgrader = websocket.Upgrader{}
 
-type Message struct {
-	Email    string `json:"email"`
-	Username string `json:"username"`
-	Message  string `json:"message"`
+type Event struct {
+	ID      string    `json:"id"`
+	Type    EventType `json:"type"`
+	User    User      `json:"user"`
+	Message string    `json:"message"`
 }
+
+type User struct {
+	Username string `json:"username"`
+	Email    string `json:"email"`
+}
+
+type EventType int8
+
+const (
+	Msg   EventType = 0
+	Join  EventType = 1
+	Leave EventType = 2
+)
 
 func HandleConnections(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
@@ -27,22 +41,29 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer ws.Close()
-	join()
-	clients[ws] = true
+	clients[ws] = User{}
 
 	for _, msg := range storage {
 		ws.WriteJSON(msg)
 	}
 
 	for {
-		var msg Message
+		var msg Event
 		err := ws.ReadJSON(&msg)
 		if err != nil {
 			log.Printf("err: %v", err)
+			leave(clients[ws])
 			delete(clients, ws)
-			leave()
 			break
 		}
+
+		if msg.Type == Join {
+			join(msg.User)
+			clients[ws] = msg.User
+			continue
+		}
+
+		// msg.EventType = 0
 
 		storage = append(storage, msg)
 		saveMessage(msg)
@@ -67,19 +88,19 @@ func HandleMessages() {
 	}
 }
 
-func saveMessage(msg Message) {
+func saveMessage(msg Event) {
 	f, err := os.OpenFile("./message.txt", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil {
 		panic(err)
 	}
-	_, err = f.Write([]byte(msg.Username + "/" + msg.Email + " - " + msg.Message + "\n"))
+	_, err = f.Write([]byte(msg.User.Username + "/" + msg.User.Email + " - " + msg.Message + "\n"))
 	if err != nil {
-    panic(err)
-  }
-  f.Close()
+		panic(err)
+	}
+	f.Close()
 }
 
-func ObsceneFilter(msg *Message) {
+func ObsceneFilter(msg *Event) {
 	obscenes := [6]string{"buzi", "fasz", "szar", "anyád", "kurva", "geci"}
 	var result []string
 	for _, word := range strings.Split(msg.Message, " ") {
@@ -93,20 +114,24 @@ func ObsceneFilter(msg *Message) {
 	msg.Message = strings.Join(result, " ")
 }
 
-func join() {
-	var sysMsg = Message{
-		Email:    "system",
-		Username: "system",
-		Message:  "Somebody joined to the channel.",
+func join(user User) {
+	var sysMsg = Event{
+		User: User{
+			Username: "system",
+			Email:    "system",
+		},
+		Message: user.Username + " joined to the channel.",
 	}
 	broadcast <- sysMsg
 }
 
-func leave() {
-	var sysMsg = Message{
-		Email:    "system",
-		Username: "system",
-		Message:  "Somebody has left the channel.",
+func leave(user User) {
+	var sysMsg = Event{
+		User: User{
+			Username: "system",
+			Email:    "system",
+		},
+		Message: user.Username + " has left the channel.",
 	}
 	broadcast <- sysMsg
 }
