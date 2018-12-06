@@ -24,6 +24,9 @@ new Vue({
             var element = document.getElementById('chat-messages');
             element.scrollTop = element.scrollHeight; // Auto scroll to the bottom
         });
+        this.ws.addEventListener('onclose', function(e) {
+            
+        });
     },
     methods: {
         send: function () {
@@ -34,6 +37,7 @@ new Vue({
                             email: this.email,
                             username: this.username
                         },
+                        type: 0,
                         message: $('<p>').html(this.newMsg).text() // Strip out html
                     }));
                 this.newMsg = ''; // Reset newMsg
@@ -51,6 +55,14 @@ new Vue({
             this.email = $('<p>').html(this.email).text();
             this.username = $('<p>').html(this.username).text();
             this.joined = true;
+            this.ws.send(
+                JSON.stringify({
+                    user: {
+                        email: this.email,
+                        username: this.username
+                    },
+                    type: 1
+                }));
         },
         gravatarURL: function (email) {
             return 'http://www.gravatar.com/avatar/' + CryptoJS.MD5(email);

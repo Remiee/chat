@@ -29,9 +29,9 @@ type User struct {
 type EventType int8
 
 const (
-	Msg EventType = iota
-	Join
-	Leave
+	Msg   EventType = 0
+	Join  EventType = 1
+	Leave EventType = 2
 )
 
 func HandleConnections(w http.ResponseWriter, r *http.Request) {
@@ -41,9 +41,7 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer ws.Close()
-	join()
-	var newEvent Event
-	clients[ws] = newEvent.User
+	clients[ws] = User{}
 
 	for _, msg := range storage {
 		ws.WriteJSON(msg)
@@ -54,10 +52,18 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 		err := ws.ReadJSON(&msg)
 		if err != nil {
 			log.Printf("err: %v", err)
+			leave(clients[ws])
 			delete(clients, ws)
-			leave()
 			break
 		}
+
+		if msg.Type == Join {
+			join(msg.User)
+			clients[ws] = msg.User
+			continue
+		}
+
+		// msg.EventType = 0
 
 		storage = append(storage, msg)
 		saveMessage(msg)
@@ -108,24 +114,24 @@ func ObsceneFilter(msg *Event) {
 	msg.Message = strings.Join(result, " ")
 }
 
-func join() {
+func join(user User) {
 	var sysMsg = Event{
 		User: User{
 			Username: "system",
 			Email:    "system",
 		},
-		Message: "Somebody joined to the channel.",
+		Message: user.Username + " joined to the channel.",
 	}
 	broadcast <- sysMsg
 }
 
-func leave() {
+func leave(user User) {
 	var sysMsg = Event{
 		User: User{
 			Username: "system",
 			Email:    "system",
 		},
-		Message: "Somebody has left the channel.",
+		Message: user.Username + " has left the channel.",
 	}
 	broadcast <- sysMsg
 }
